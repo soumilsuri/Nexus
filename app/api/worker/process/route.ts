@@ -11,10 +11,20 @@ export async function POST(request: Request) {
   // Simple auth could be added here for Vercel Cron, usually by checking an authorization header
   try {
     // Record heartbeat with 65s TTL (cron runs every 60s)
-    await redis.setex('worker:heartbeat', 65, Date.now().toString());
+    try {
+      await redis.setex('worker:heartbeat', 65, Date.now().toString());
+    } catch (e) {
+      console.warn('Heartbeat update failed, possible Redis timeout:', e);
+    }
 
     const batchSize = 10;
-    const jobIds = await dequeueJobs(batchSize);
+    let jobIds: string[] = [];
+    try {
+      jobIds = await dequeueJobs(batchSize);
+    } catch (e: any) {
+      console.warn('Failed to dequeue jobs, possibly Redis timeout:', e);
+      return NextResponse.json({ error: 'Redis dequeue failed', details: e.message }, { status: 504 });
+    }
     
     if (jobIds.length === 0) {
       return NextResponse.json({ message: 'No jobs in queue' }, { status: 200 });
