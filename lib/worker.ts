@@ -3,6 +3,7 @@ import { jobs } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { updateJobStatus } from './jobs';
 import { enqueueJob, JobPriority } from './queue';
+import { moveToDlq } from './dlq';
 
 export async function processJob(jobId: string) {
   // Fetch job
@@ -51,11 +52,11 @@ export async function processJob(jobId: string) {
 
       await enqueueJob(jobId, job.priority as JobPriority, executeAt);
     } else {
-      await updateJobStatus(jobId, 'failed', {
+      await updateJobStatus(jobId, 'dead_lettered', {
         retryCount: newRetryCount,
         errorMessage: `Max retries reached: ${error.message}`
       });
-      // DLQ promotion logic will be added in task 11
+      await moveToDlq(jobId);
     }
   }
 }
