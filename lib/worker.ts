@@ -2,6 +2,7 @@ import { db } from './db';
 import { jobs } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { updateJobStatus } from './jobs';
+import { enqueueJob, JobPriority } from './queue';
 
 export async function processJob(jobId: string) {
   // Fetch job
@@ -36,9 +37,25 @@ export async function processJob(jobId: string) {
       latencyMs,
     });
   } catch (error: any) {
-    // Basic failure state. Retries will be added in the next step.
-    await updateJobStatus(jobId, 'failed', {
-      errorMessage: error.message
-    });
+    const newRetryCount = job.retryCount + 1;
+    
+    if (newRetryCount <= job.maxRetries) {
+      const baseDelay = 1000;
+      const delay = baseDelay * Math.pow(2, job.retryCount);
+      const executeAt = Date.now() + delay;
+
+      await updateJobStatus(jobId, 'pending', {
+        retryCount: newRetryCount,
+        errorMessage: `Retry ${newRetryCount}: ${error.message}`
+      });
+
+      await enqueueJob(jobId, job.priority as JobPriority, executeAt);
+    } else {
+      await updateJobStatus(jobId, 'failed', {
+        retryCount: newRetryCount,
+        errorMessage: `Max retries reached: ${error.message}`
+      });
+      // DLQ promotion logic will be added in task 11
+    }
   }
 }
