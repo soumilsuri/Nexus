@@ -4,7 +4,13 @@ const CACHE_TTL_SECONDS = 30;
 
 export async function getCachedJob(id: string) {
   const cached = await redis.get(`job:${id}`);
-  return cached ? (typeof cached === 'string' ? JSON.parse(cached) : cached) : null;
+  if (cached) {
+    await redis.incr('metrics:cache_hits');
+    return typeof cached === 'string' ? JSON.parse(cached) : cached;
+  } else {
+    await redis.incr('metrics:cache_misses');
+    return null;
+  }
 }
 
 export async function setCachedJob(id: string, data: any) {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { dequeueJobs } from '@/lib/queue';
 import { processJob } from '@/lib/worker';
 import { redis } from '@/lib/redis';
+import { captureMetricsSnapshot } from '@/lib/metrics';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Max duration for Vercel Hobby is usually 10s, but setting to 60 for Pro if applicable
@@ -21,6 +22,9 @@ export async function POST(request: Request) {
 
     // Process all jobs in parallel
     await Promise.allSettled(jobIds.map(id => processJob(id)));
+    
+    // Capture metrics at the end of the tick
+    await captureMetricsSnapshot();
     
     return NextResponse.json({ processed: jobIds.length, jobIds }, { status: 200 });
   } catch (error) {
