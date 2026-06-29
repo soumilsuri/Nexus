@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { jobs } from '@/db/schema';
 import { enqueueJob, JobPriority } from '@/lib/queue';
+import { rateLimit } from '@/lib/ratelimit';
 
 const enqueueSchema = z.object({
   type: z.enum(['compute', 'io', 'network']),
@@ -12,6 +13,24 @@ const enqueueSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const ip = request.headers.get('x-forwarded-for') ?? '127.0.0.1';
+    const { success, limit, reset, remaining } = await rateLimit.limit(ip);
+    
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded' },
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': limit.toString(),
+            'X-RateLimit-Remaining': remaining.toString(),
+            'X-RateLimit-Reset': reset.toString(),
+            'Retry-After': Math.ceil((reset - Date.now()) / 1000).toString(),
+          }
+        }
+      );
+    }
+
     const body = await request.json();
     const result = enqueueSchema.safeParse(body);
     
