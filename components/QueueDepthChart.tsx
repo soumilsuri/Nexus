@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Activity } from 'lucide-react';
 
-export default function QueueDepthChart() {
+export default function QueueDepthChart({ snapshot }: { snapshot?: any }) {
   const [data, setData] = useState<any[]>([
     { name: 'Critical', depth: 0, fill: '#ef4444' },
     { name: 'Normal', depth: 0, fill: '#3b82f6' },
@@ -12,28 +12,15 @@ export default function QueueDepthChart() {
   ]);
 
   useEffect(() => {
-    const eventSource = new EventSource('/api/metrics/stream');
-    
-    eventSource.onmessage = (event) => {
-      try {
-        const parsed = JSON.parse(event.data);
-        if (parsed.snapshot) {
-          const { queueDepthCritical, queueDepthNormal, queueDepthLow } = parsed.snapshot;
-          setData([
-            { name: 'Critical', depth: queueDepthCritical, fill: '#ef4444' },
-            { name: 'Normal', depth: queueDepthNormal, fill: '#3b82f6' },
-            { name: 'Low', depth: queueDepthLow, fill: '#10b981' },
-          ]);
-        }
-      } catch (e) {
-        console.error('Failed to parse SSE data', e);
-      }
-    };
-
-    return () => {
-      eventSource.close();
-    };
-  }, []);
+    if (snapshot) {
+      const { queueDepthCritical, queueDepthNormal, queueDepthLow } = snapshot;
+      setData([
+        { name: 'Critical', depth: queueDepthCritical || 0, fill: '#ef4444' },
+        { name: 'Normal', depth: queueDepthNormal || 0, fill: '#3b82f6' },
+        { name: 'Low', depth: queueDepthLow || 0, fill: '#10b981' },
+      ]);
+    }
+  }, [snapshot]);
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 shadow-sm col-span-1">
